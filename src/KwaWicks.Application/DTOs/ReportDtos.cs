@@ -179,6 +179,31 @@ public class MyDeliveryItem
     public string PaymentStatus { get; set; } = "";
 }
 
+// ── Sales Report (Client + WalkIn breakdown) ─────────────────────────────────
+public class SalesReportResponse
+{
+    public DateTime? From { get; set; }
+    public DateTime? To { get; set; }
+    public List<SalesReportRow> Rows { get; set; } = new();
+}
+
+public class SalesReportRow
+{
+    public string InvoiceId     { get; set; } = "";
+    public string InvoiceNumber { get; set; } = "";
+    public DateTime Date        { get; set; }
+    public string ClientId      { get; set; } = "";
+    public string ClientName    { get; set; } = "";
+    public bool   IsWalkIn      { get; set; }
+    public string SpeciesId     { get; set; } = "";
+    public string SpeciesName   { get; set; } = "";
+    public int    Qty           { get; set; }
+    public decimal UnitPrice    { get; set; }
+    public decimal LineTotal    { get; set; }
+    public string PaymentType   { get; set; } = "";
+    public string SaleType      { get; set; } = "";
+}
+
 // ── Admin: Species Revenue ────────────────────────────────────────────────────
 public class SpeciesRevenueResponse
 {

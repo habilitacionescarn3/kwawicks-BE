@@ -437,4 +437,50 @@ public class ReportService : IReportService
             ClosingBalance  = running   // final running value after all in-range entries
         };
     }
+
+    public async Task<SalesReportResponse> GetSalesReportAsync(
+        DateTime? from,
+        DateTime? to,
+        CancellationToken ct = default)
+    {
+        var invoicesTask = _invoices.ListAsync(null, null, ct);
+        var clientsTask  = _clients.ListAsync(500, ct);
+        var speciesTask  = _species.ListAsync(ct);
+        await Task.WhenAll(invoicesTask, clientsTask, speciesTask);
+
+        var clientMap  = clientsTask.Result.ToDictionary(c => c.ClientId);
+        var speciesMap = speciesTask.Result.ToDictionary(s => s.SpeciesId, s => s.Name);
+
+        var rows = invoicesTask.Result
+            .Where(i => from == null || i.CreatedAt >= from.Value)
+            .Where(i => to   == null || i.CreatedAt <= to.Value.AddDays(1))
+            .OrderBy(i => i.CreatedAt)
+            .SelectMany(inv =>
+            {
+                clientMap.TryGetValue(inv.CustomerId, out var client);
+                return inv.Lines.Select(line =>
+                {
+                    speciesMap.TryGetValue(line.SpeciesId, out var speciesName);
+                    return new SalesReportRow
+                    {
+                        InvoiceId     = inv.InvoiceId,
+                        InvoiceNumber = inv.InvoiceNumber,
+                        Date          = inv.CreatedAt,
+                        ClientId      = inv.CustomerId,
+                        ClientName    = client?.ClientName ?? "(Unknown)",
+                        IsWalkIn      = client?.IsWalkIn ?? false,
+                        SpeciesId     = line.SpeciesId,
+                        SpeciesName   = speciesName ?? line.SpeciesId,
+                        Qty           = line.Quantity,
+                        UnitPrice     = line.UnitPrice,
+                        LineTotal     = line.LineTotal,
+                        PaymentType   = inv.PaymentType,
+                        SaleType      = inv.SaleType,
+                    };
+                });
+            })
+            .ToList();
+
+        return new SalesReportResponse { From = from, To = to, Rows = rows };
+    }
 }

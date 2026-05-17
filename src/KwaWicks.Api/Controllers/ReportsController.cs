@@ -122,6 +122,17 @@ public class ReportsController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("sales")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> SalesReport(
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        CancellationToken ct)
+    {
+        var result = await _reports.GetSalesReportAsync(from, to, ct);
+        return Ok(result);
+    }
+
     // ── Driver ───────────────────────────────────────────────────────────────
 
     [HttpGet("my-deliveries")]

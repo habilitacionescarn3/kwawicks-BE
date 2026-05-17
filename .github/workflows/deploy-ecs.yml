@@ -3,6 +3,7 @@ name: Deploy KwaWicks Backend to ECS
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
 
 permissions:
   id-token: write
