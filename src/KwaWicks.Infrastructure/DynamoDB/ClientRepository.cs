@@ -68,21 +68,34 @@ public class ClientRepository : IClientRepository
 
     public async Task<List<Client>> ListAsync(int limit = 50, CancellationToken ct = default)
     {
-        // Simple scan by EntityType.
-        // If you want this to scale, we can add a GSI like GSI1PK="CLIENT" later.
-        var res = await _ddb.ScanAsync(new ScanRequest
-        {
-            TableName = _tableName,
-            Limit = Math.Clamp(limit, 1, 200),
-            FilterExpression = "EntityType = :t AND SK = :sk",
-            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
-            {
-                [":t"] = new AttributeValue { S = "Client" },
-                [":sk"] = new AttributeValue { S = SkValue }
-            }
-        }, ct);
+        // Paginate through the entire table — DynamoDB's Limit caps items *scanned*
+        // (not returned), so a fixed Limit would silently miss clients in large tables.
+        var clients = new List<Client>();
+        Dictionary<string, AttributeValue>? lastKey = null;
 
-        return res.Items.Select(FromItem).ToList();
+        do
+        {
+            var req = new ScanRequest
+            {
+                TableName = _tableName,
+                FilterExpression = "EntityType = :t AND SK = :sk",
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                {
+                    [":t"] = new AttributeValue { S = "Client" },
+                    [":sk"] = new AttributeValue { S = SkValue }
+                }
+            };
+
+            if (lastKey is not null)
+                req.ExclusiveStartKey = lastKey;
+
+            var res = await _ddb.ScanAsync(req, ct);
+            clients.AddRange(res.Items.Select(FromItem));
+            lastKey = res.LastEvaluatedKey?.Count > 0 ? res.LastEvaluatedKey : null;
+        }
+        while (lastKey is not null);
+
+        return clients;
     }
 
     public async Task<bool> DeleteAsync(string clientId, CancellationToken ct = default)

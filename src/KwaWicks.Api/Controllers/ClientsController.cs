@@ -20,7 +20,7 @@ public class ClientsController : ControllerBase
 
     // POST /api/Clients
     [HttpPost]
-    [Authorize(Policy = "AdminOnly")] // uncomment if only Admin can create
+    [Authorize(Policy = "ProcurementAccess")]
     [ProducesResponseType(typeof(ClientDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -64,7 +64,7 @@ public class ClientsController : ControllerBase
 
     // PUT /api/Clients/{clientId}
     [HttpPut("{clientId}")]
-    [Authorize(Policy = "AdminOnly")] // optional
+    [Authorize(Policy = "ProcurementAccess")]
     [ProducesResponseType(typeof(ClientDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -86,7 +86,7 @@ public class ClientsController : ControllerBase
 
     // DELETE /api/Clients/{clientId}
     [HttpDelete("{clientId}")]
-    [Authorize(Policy = "AdminOnly")] // optional
+    [Authorize(Policy = "ProcurementAccess")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
