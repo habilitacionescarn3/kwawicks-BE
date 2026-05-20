@@ -830,6 +830,87 @@ public class CollectionRequestService : ICollectionRequestService
         return await MapToResponseAsync(cr, ct);
     }
 
+    public async Task<CollectionRequestResponse> RemoveDeliveryAllocationAsync(
+        string crId, string deliveryOrderId, CancellationToken ct = default)
+    {
+        var cr = await _repo.GetAsync(crId, ct)
+            ?? throw new InvalidOperationException($"Collection request not found: {crId}");
+
+        var allocation = cr.DeliveryAllocations.FirstOrDefault(a => a.DeliveryOrderId == deliveryOrderId)
+            ?? throw new InvalidOperationException($"Allocation '{deliveryOrderId}' not found on this collection request.");
+
+        // ── HUB allocation ──────────────────────────────────────────────────────
+        if (deliveryOrderId == "HUB")
+        {
+            if (allocation.HubAcceptanceStatus == "Accepted")
+                throw new InvalidOperationException(
+                    "Cannot remove a HUB allocation that has already been accepted — stock has been added to hub inventory.");
+
+            cr.DeliveryAllocations.Remove(allocation);
+            cr.UpdatedAt = DateTime.UtcNow;
+            await _repo.UpdateAsync(cr, ct);
+            return await MapToResponseAsync(cr, ct);
+        }
+
+        // ── Client delivery allocation ──────────────────────────────────────────
+        var deliveryOrder = await _deliveryRepo.GetAsync(deliveryOrderId, ct)
+            ?? throw new InvalidOperationException($"Delivery order not found: {deliveryOrderId}");
+
+        if (!string.IsNullOrWhiteSpace(deliveryOrder.InvoiceId))
+            throw new InvalidOperationException(
+                "Cannot remove this allocation — the delivery has already been invoiced.");
+
+        var blockedStatuses = new[] { "Delivered", "MarkedAtHub" };
+        if (blockedStatuses.Contains(deliveryOrder.Status))
+            throw new InvalidOperationException(
+                $"Cannot remove this allocation — the delivery order has status '{deliveryOrder.Status}'.");
+
+        // Reverse QtyBookedOutForDelivery for each species in the allocation
+        var reversed = new List<(string speciesId, int qty)>();
+        try
+        {
+            foreach (var line in allocation.Lines)
+            {
+                ct.ThrowIfCancellationRequested();
+                var species = await _speciesRepo.GetAsync(line.SpeciesId, ct);
+                if (species != null)
+                {
+                    species.QtyBookedOutForDelivery = Math.Max(0, species.QtyBookedOutForDelivery - line.Qty);
+                    await _speciesRepo.UpdateAsync(species, ct);
+                    reversed.Add((line.SpeciesId, line.Qty));
+                }
+            }
+
+            // Delete the delivery order — it was created solely for this allocation
+            await _deliveryRepo.DeleteAsync(deliveryOrderId, ct);
+
+            // Remove the allocation record from the collection request
+            cr.DeliveryAllocations.Remove(allocation);
+            cr.UpdatedAt = DateTime.UtcNow;
+            await _repo.UpdateAsync(cr, ct);
+        }
+        catch
+        {
+            // Compensating rollback — re-book the species quantities
+            foreach (var (speciesId, qty) in reversed)
+            {
+                try
+                {
+                    var s = await _speciesRepo.GetAsync(speciesId, ct);
+                    if (s != null)
+                    {
+                        s.QtyBookedOutForDelivery += qty;
+                        await _speciesRepo.UpdateAsync(s, ct);
+                    }
+                }
+                catch { /* swallow rollback errors */ }
+            }
+            throw;
+        }
+
+        return await MapToResponseAsync(cr, ct);
+    }
+
     public async Task<List<CollectionShortfallReportItem>> GetShortfallReportAsync(DateTime? from = null, DateTime? to = null, CancellationToken ct = default)
     {
         var all = await _repo.ListAsync(null, null, null, ct);

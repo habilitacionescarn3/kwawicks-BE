@@ -116,6 +116,19 @@ public class DeliveryOrderRepository : IDeliveryOrderRepository
         return result;
     }
 
+    public async Task DeleteAsync(string deliveryOrderId, CancellationToken ct)
+    {
+        await _ddb.DeleteItemAsync(new DeleteItemRequest
+        {
+            TableName = _tableName,
+            Key = new Dictionary<string, AttributeValue>
+            {
+                ["PK"] = new AttributeValue { S = Pk(deliveryOrderId) },
+                ["SK"] = new AttributeValue { S = SkMeta }
+            }
+        }, ct);
+    }
+
     private static Dictionary<string, AttributeValue> ToItem(DeliveryOrder d) =>
         new()
         {

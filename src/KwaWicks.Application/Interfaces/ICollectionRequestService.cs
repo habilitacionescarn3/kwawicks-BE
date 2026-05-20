@@ -22,5 +22,7 @@ public interface ICollectionRequestService
     Task<CollectionRequestResponse> ConfirmDeliveryAsync(string crId, string deliveryOrderId, AdminConfirmDeliveryRequest request, CancellationToken ct = default);
     /// <summary>Hub staff physically accepts HUB-allocated stock into inventory, updating QtyOnHandHub.</summary>
     Task<CollectionRequestResponse> HubAcceptAllocationAsync(string crId, HubAcceptAllocationRequest request, CancellationToken ct = default);
+    /// <summary>Removes a delivery allocation that was added by mistake, reversing all stock bookings and deleting the delivery order.</summary>
+    Task<CollectionRequestResponse> RemoveDeliveryAllocationAsync(string crId, string deliveryOrderId, CancellationToken ct = default);
     Task<List<CollectionShortfallReportItem>> GetShortfallReportAsync(DateTime? from = null, DateTime? to = null, CancellationToken ct = default);
 }
