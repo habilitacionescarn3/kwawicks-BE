@@ -96,7 +96,6 @@ public class ClientService : IClientService
         ClientPhone = c.ClientPhone,
         ClientType = c.ClientType,
         IsWalkIn = c.IsWalkIn,
-        CreditBalance = c.CreditBalance,
         CreatedAtUtc = c.CreatedAtUtc,
         UpdatedAtUtc = c.UpdatedAtUtc
     };

@@ -24,9 +24,6 @@ public class Client
     public ClientType ClientType { get; set; } = ClientType.CODCASH;
     public bool IsWalkIn { get; set; } = false;
 
-    /// <summary>Running outstanding credit balance for Credit-type clients. Increases on invoice confirm, decreases on payment received.</summary>
-    public decimal CreditBalance { get; set; } = 0m;
-
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }

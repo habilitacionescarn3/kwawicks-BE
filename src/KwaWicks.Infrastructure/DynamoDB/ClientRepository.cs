@@ -38,7 +38,6 @@ public class ClientRepository : IClientRepository
             ["ClientPhone"] = new AttributeValue { S = client.ClientPhone ?? "" },
             ["ClientType"] = new AttributeValue { S = client.ClientType.ToString() },
             ["IsWalkIn"] = new AttributeValue { BOOL = client.IsWalkIn },
-            ["CreditBalance"] = new AttributeValue { N = client.CreditBalance.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) },
 
             ["CreatedAtUtc"] = new AttributeValue { S = client.CreatedAtUtc.ToString("O") },
             ["UpdatedAtUtc"] = new AttributeValue { S = client.UpdatedAtUtc.ToString("O") }
@@ -135,7 +134,6 @@ public class ClientRepository : IClientRepository
             ClientPhone = item.GetValueOrDefault("ClientPhone")?.S ?? "",
             ClientType = clientType,
             IsWalkIn = item.TryGetValue("IsWalkIn", out var wi) && wi.IsBOOLSet && wi.BOOL == true,
-            CreditBalance = item.TryGetValue("CreditBalance", out var cb) && decimal.TryParse(cb.N, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var bal) ? bal : 0m,
             CreatedAtUtc = created == default ? DateTime.UtcNow : created,
             UpdatedAtUtc = updated == default ? DateTime.UtcNow : updated
         };

@@ -40,7 +40,6 @@ public class ClientDto
     public string ClientPhone { get; set; } = string.Empty;
     public ClientType ClientType { get; set; }
     public bool IsWalkIn { get; set; }
-    public decimal CreditBalance { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
 }

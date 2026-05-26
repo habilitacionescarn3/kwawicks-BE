@@ -12,7 +12,7 @@ public class InvoiceService : IInvoiceService
     private readonly ISpeciesRepository _speciesRepo;
     private readonly IS3Service _s3Service;
     private readonly IPriceApprovalService _priceApproval;
-    private readonly IClientRepository _clientRepo;
+    private readonly IClientCreditService _clientCreditService;
 
     public InvoiceService(
         IInvoiceRepository invoiceRepo,
@@ -21,7 +21,7 @@ public class InvoiceService : IInvoiceService
         ISpeciesRepository speciesRepo,
         IS3Service s3Service,
         IPriceApprovalService priceApproval,
-        IClientRepository clientRepo)
+        IClientCreditService clientCreditService)
     {
         _invoiceRepo = invoiceRepo ?? throw new ArgumentNullException(nameof(invoiceRepo));
         _deliveryRepo = deliveryRepo ?? throw new ArgumentNullException(nameof(deliveryRepo));
@@ -29,7 +29,7 @@ public class InvoiceService : IInvoiceService
         _speciesRepo = speciesRepo ?? throw new ArgumentNullException(nameof(speciesRepo));
         _s3Service = s3Service ?? throw new ArgumentNullException(nameof(s3Service));
         _priceApproval = priceApproval ?? throw new ArgumentNullException(nameof(priceApproval));
-        _clientRepo = clientRepo ?? throw new ArgumentNullException(nameof(clientRepo));
+        _clientCreditService = clientCreditService ?? throw new ArgumentNullException(nameof(clientCreditService));
     }
 
     // ── Hub-side: create invoice directly (existing flow) ──────────────────
@@ -359,15 +359,10 @@ public class InvoiceService : IInvoiceService
         invoice.UpdatedAt = DateTime.UtcNow;
         await _invoiceRepo.UpdateAsync(invoice, ct);
 
+        // Credit invoices: post an InvoiceCharge to the client's credit ledger (once only).
         if (!alreadyConfirmed && invoice.PaymentType == "Credit" && !string.IsNullOrWhiteSpace(invoice.CustomerId))
         {
-            var client = await _clientRepo.GetAsync(invoice.CustomerId, ct);
-            if (client != null)
-            {
-                client.CreditBalance += invoice.GrandTotal;
-                client.UpdatedAtUtc = DateTime.UtcNow;
-                await _clientRepo.PutAsync(client, ct);
-            }
+            await _clientCreditService.ChargeInvoiceAsync(invoice.CustomerId, invoiceId, invoice.GrandTotal, ct);
         }
     }
 
