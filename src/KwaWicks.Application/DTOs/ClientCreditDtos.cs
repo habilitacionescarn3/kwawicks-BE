@@ -15,6 +15,12 @@ public class AddCreditDepositRequest
     public string? ProofS3Key { get; set; }
 }
 
+public class AddManualChargeRequest
+{
+    public decimal Amount { get; set; }
+    public string? Notes { get; set; }
+}
+
 public class CreditProofUploadUrlResponse
 {
     public string UploadUrl { get; set; } = "";

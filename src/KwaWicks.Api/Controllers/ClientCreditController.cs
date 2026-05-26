@@ -46,7 +46,42 @@ public class ClientCreditController : ControllerBase
         return Ok(result);
     }
 
-    // POST /api/clients/{clientId}/credit — add a deposit
+    // POST /api/clients/{clientId}/credit/charges — admin manual charge (corrects wrong data)
+    [HttpPost("charges")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> AddManualCharge(
+        string clientId,
+        [FromBody] AddManualChargeRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var userId = User.FindFirstValue("username") ??
+                         User.FindFirstValue(ClaimTypes.Name) ??
+                         User.FindFirstValue(ClaimTypes.NameIdentifier) ??
+                         "admin";
+            var entry = await _service.AddManualChargeAsync(clientId, request.Amount, request.Notes ?? "", userId, ct);
+            return Ok(entry);
+        }
+        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
+        catch (Exception ex)         { return StatusCode(500, new { error = ex.Message }); }
+    }
+
+    // DELETE /api/clients/{clientId}/credit/entries/{entryId} — admin corrects wrong entries
+    [HttpDelete("entries/{entryId}")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> DeleteEntry(string clientId, string entryId, CancellationToken ct)
+    {
+        try
+        {
+            await _service.DeleteEntryAsync(clientId, entryId, ct);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex) { return NotFound(new { error = ex.Message }); }
+        catch (Exception ex)                 { return StatusCode(500, new { error = ex.Message }); }
+    }
+
+    // POST /api/clients/{clientId}/credit — add a deposit (payment received from client)
     [HttpPost]
     public async Task<IActionResult> AddDeposit(
         string clientId,

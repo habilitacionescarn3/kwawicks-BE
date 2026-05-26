@@ -60,6 +60,37 @@ public class ClientCreditService : IClientCreditService
         return Map(entry);
     }
 
+    public async Task<ClientCreditEntryResponse> AddManualChargeAsync(
+        string clientId, decimal amount, string notes, string createdByUserId, CancellationToken ct = default)
+    {
+        if (amount <= 0)
+            throw new ArgumentException("Charge amount must be greater than zero.");
+
+        var entry = new ClientCreditEntry
+        {
+            ClientId        = clientId,
+            Amount          = -Math.Abs(amount), // negative = charge against client
+            EntryType       = "ManualCharge",
+            PaymentMethod   = "",
+            Reference       = "",
+            Notes           = string.IsNullOrWhiteSpace(notes) ? "Manual charge adjustment" : notes.Trim(),
+            CreatedByUserId = createdByUserId,
+        };
+
+        await _repo.AddEntryAsync(entry, ct);
+        return Map(entry);
+    }
+
+    public async Task DeleteEntryAsync(string clientId, string entryId, CancellationToken ct = default)
+    {
+        // Verify the entry belongs to this client before deleting
+        var entries = await _repo.ListByClientAsync(clientId, ct);
+        if (!entries.Any(e => e.EntryId == entryId))
+            throw new InvalidOperationException($"Entry '{entryId}' not found for client '{clientId}'.");
+
+        await _repo.DeleteEntryAsync(entryId, ct);
+    }
+
     public async Task<ClientCreditLedgerResponse> GetLedgerAsync(
         string clientId, CancellationToken ct = default)
     {

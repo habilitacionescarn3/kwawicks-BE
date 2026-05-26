@@ -86,6 +86,19 @@ public class ClientCreditRepository : IClientCreditRepository
             .Sum(i => decimal.Parse(i["Amount"].N!, NumberStyles.Any, CultureInfo.InvariantCulture));
     }
 
+    public async Task DeleteEntryAsync(string entryId, CancellationToken ct = default)
+    {
+        await _ddb.DeleteItemAsync(new DeleteItemRequest
+        {
+            TableName = _tableName,
+            Key = new Dictionary<string, AttributeValue>
+            {
+                ["PK"] = new() { S = Pk(entryId) },
+                ["SK"] = new() { S = SkMeta }
+            }
+        }, ct);
+    }
+
     // ── Serialisation ──────────────────────────────────────────────────────
 
     private static Dictionary<string, AttributeValue> ToItem(ClientCreditEntry e) => new()
