@@ -350,13 +350,16 @@ public class InvoiceService : IInvoiceService
         var invoice = await _invoiceRepo.GetAsync(invoiceId, ct)
             ?? throw new InvalidOperationException($"Invoice not found: {invoiceId}");
 
+        // Guard: only increment credit balance on the very first confirmation.
+        // Re-running confirm during a recon must not double-count.
+        var alreadyConfirmed = invoice.PaymentStatus == "Paid";
+
         invoice.PaymentStatus = "Paid";
         invoice.Status = "Paid";
         invoice.UpdatedAt = DateTime.UtcNow;
         await _invoiceRepo.UpdateAsync(invoice, ct);
 
-        // For Credit invoices, add the invoice total to the client's outstanding credit balance
-        if (invoice.PaymentType == "Credit" && !string.IsNullOrWhiteSpace(invoice.CustomerId))
+        if (!alreadyConfirmed && invoice.PaymentType == "Credit" && !string.IsNullOrWhiteSpace(invoice.CustomerId))
         {
             var client = await _clientRepo.GetAsync(invoice.CustomerId, ct);
             if (client != null)
