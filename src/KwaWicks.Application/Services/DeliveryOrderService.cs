@@ -302,6 +302,29 @@ public class DeliveryOrderService : IDeliveryOrderService
         }
     }
 
+    public async Task DeleteAsync(string deliveryOrderId, CancellationToken ct)
+    {
+        var order = await _deliveryRepo.GetAsync(deliveryOrderId, ct)
+            ?? throw new InvalidOperationException($"Delivery order not found: {deliveryOrderId}");
+
+        if (order.Status != "Open")
+            throw new InvalidOperationException(
+                $"Only Open orders can be deleted. This order is '{order.Status}'.");
+
+        // Restore stock for every line before deleting
+        foreach (var line in order.Lines)
+        {
+            var species = await _speciesRepo.GetAsync(line.SpeciesId, ct);
+            if (species is null) continue;
+
+            species.QtyOnHandHub += line.Quantity;
+            species.QtyBookedOutForDelivery = Math.Max(0, species.QtyBookedOutForDelivery - line.Quantity);
+            await _speciesRepo.UpdateAsync(species, ct);
+        }
+
+        await _deliveryRepo.DeleteAsync(deliveryOrderId, ct);
+    }
+
     private static DeliveryOrderResponse MapToResponse(DeliveryOrder order) => new()
     {
         DeliveryOrderId = order.DeliveryOrderId,

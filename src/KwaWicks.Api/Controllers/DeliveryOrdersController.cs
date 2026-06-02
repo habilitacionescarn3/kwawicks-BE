@@ -255,6 +255,29 @@ public class DeliveryOrdersController : ControllerBase
         }
     }
 
+    // DELETE /api/delivery-orders/{deliveryOrderId}  (Admin only — Open orders only, restores stock)
+    [HttpDelete("{deliveryOrderId}")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Delete(string deliveryOrderId, CancellationToken ct)
+    {
+        try
+        {
+            await _service.DeleteAsync(deliveryOrderId, ct);
+            return NoContent();
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     private async Task<string?> ResolvePhoneAsync(string clientId, string? phoneOverride, CancellationToken ct)
     {
         var client = await _clientService.GetByIdAsync(clientId, ct);
