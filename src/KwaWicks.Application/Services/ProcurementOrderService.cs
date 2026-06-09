@@ -28,13 +28,22 @@ public class ProcurementOrderService : IProcurementOrderService
         if (string.IsNullOrWhiteSpace(request.SupplierId)) throw new ArgumentException("SupplierId is required.");
         if (request.Lines == null || request.Lines.Count == 0) throw new ArgumentException("At least one line is required.");
 
-        var supplier = await _supplierRepo.GetAsync(request.SupplierId, ct)
-            ?? throw new InvalidOperationException($"Supplier not found: {request.SupplierId}");
+        string supplierName;
+        if (string.Equals(request.SupplierId, "HUB", StringComparison.OrdinalIgnoreCase))
+        {
+            supplierName = "Hub";
+        }
+        else
+        {
+            var supplier = await _supplierRepo.GetAsync(request.SupplierId, ct)
+                ?? throw new InvalidOperationException($"Supplier not found: {request.SupplierId}");
+            supplierName = supplier.Name;
+        }
 
         var order = new ProcurementOrder
         {
             SupplierId = request.SupplierId,
-            SupplierName = supplier.Name,
+            SupplierName = supplierName,
             SupplierOrderReference = request.SupplierOrderReference ?? "",
             Notes = request.Notes ?? "",
             Status = "Draft",
@@ -85,11 +94,20 @@ public class ProcurementOrderService : IProcurementOrderService
         if (string.IsNullOrWhiteSpace(request.SupplierId)) throw new ArgumentException("SupplierId is required.");
         if (request.Lines == null || request.Lines.Count == 0) throw new ArgumentException("At least one line is required.");
 
-        var supplier = await _supplierRepo.GetAsync(request.SupplierId, ct)
-            ?? throw new InvalidOperationException($"Supplier not found: {request.SupplierId}");
+        string supplierName;
+        if (string.Equals(request.SupplierId, "HUB", StringComparison.OrdinalIgnoreCase))
+        {
+            supplierName = "Hub";
+        }
+        else
+        {
+            var supplier = await _supplierRepo.GetAsync(request.SupplierId, ct)
+                ?? throw new InvalidOperationException($"Supplier not found: {request.SupplierId}");
+            supplierName = supplier.Name;
+        }
 
         order.SupplierId = request.SupplierId;
-        order.SupplierName = supplier.Name;
+        order.SupplierName = supplierName;
         order.SupplierOrderReference = request.SupplierOrderReference ?? "";
         order.Notes = request.Notes ?? "";
         order.Lines = new List<ProcurementOrderLine>();
