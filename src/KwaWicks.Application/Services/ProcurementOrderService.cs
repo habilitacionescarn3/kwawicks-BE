@@ -51,6 +51,8 @@ public class ProcurementOrderService : IProcurementOrderService
             Lines = new List<ProcurementOrderLine>()
         };
 
+        bool isHubOrder = string.Equals(request.SupplierId, "HUB", StringComparison.OrdinalIgnoreCase);
+
         foreach (var line in request.Lines)
         {
             if (string.IsNullOrWhiteSpace(line.SpeciesId)) throw new ArgumentException("SpeciesId is required on all lines.");
@@ -58,6 +60,10 @@ public class ProcurementOrderService : IProcurementOrderService
 
             var species = await _speciesRepo.GetAsync(line.SpeciesId, ct)
                 ?? throw new InvalidOperationException($"Species not found: {line.SpeciesId}");
+
+            if (isHubOrder && line.OrderedQty > species.QtyOnHandHub)
+                throw new InvalidOperationException(
+                    $"Insufficient hub stock for {species.Name}. Available: {species.QtyOnHandHub}, requested: {line.OrderedQty}");
 
             order.Lines.Add(new ProcurementOrderLine
             {
@@ -112,6 +118,8 @@ public class ProcurementOrderService : IProcurementOrderService
         order.Notes = request.Notes ?? "";
         order.Lines = new List<ProcurementOrderLine>();
 
+        bool isHubOrderEdit = string.Equals(request.SupplierId, "HUB", StringComparison.OrdinalIgnoreCase);
+
         foreach (var line in request.Lines)
         {
             if (string.IsNullOrWhiteSpace(line.SpeciesId)) throw new ArgumentException("SpeciesId is required on all lines.");
@@ -119,6 +127,10 @@ public class ProcurementOrderService : IProcurementOrderService
 
             var species = await _speciesRepo.GetAsync(line.SpeciesId, ct)
                 ?? throw new InvalidOperationException($"Species not found: {line.SpeciesId}");
+
+            if (isHubOrderEdit && line.OrderedQty > species.QtyOnHandHub)
+                throw new InvalidOperationException(
+                    $"Insufficient hub stock for {species.Name}. Available: {species.QtyOnHandHub}, requested: {line.OrderedQty}");
 
             order.Lines.Add(new ProcurementOrderLine
             {
