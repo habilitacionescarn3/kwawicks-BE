@@ -28,9 +28,8 @@ public class StockLossService : IStockLossService
             throw new ArgumentException(
                 $"Cannot record a loss of {request.Qty} — only {species.QtyOnHandHub} units are on hand at the hub.");
 
-        // Decrement hub stock
-        species.QtyOnHandHub -= request.Qty;
-        await _speciesRepo.UpdateAsync(species, ct);
+        // Atomically decrement hub stock
+        await _speciesRepo.AdjustStockAsync(request.SpeciesId, -request.Qty, 0, ct, minOnHandRequired: request.Qty);
 
         // Persist the audit record
         var loss = new StockLoss

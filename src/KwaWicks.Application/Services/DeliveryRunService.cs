@@ -95,10 +95,8 @@ public class DeliveryRunService : IDeliveryRunService
                     throw new InvalidOperationException(
                         $"Insufficient stock for {species.Name}. Available: {available}, requested: {reqLine.Qty}.");
 
-                // Book stock out (same as standard DeliveryOrder.Create)
-                species.QtyOnHandHub -= reqLine.Qty;
-                species.QtyBookedOutForDelivery += reqLine.Qty;
-                await _speciesRepo.UpdateAsync(species, ct);
+                // Atomic book-out: deduct on-hand, add to booked
+                await _speciesRepo.AdjustStockAsync(reqLine.SpeciesId, -reqLine.Qty, +reqLine.Qty, ct, minOnHandRequired: reqLine.Qty);
                 bookedOut.Add((reqLine.SpeciesId, reqLine.Qty));
 
                 var unitPrice = reqLine.UnitPrice > 0 ? reqLine.UnitPrice : (species.SellPrice ?? 0m);
@@ -154,13 +152,7 @@ public class DeliveryRunService : IDeliveryRunService
             {
                 try
                 {
-                    var s = await _speciesRepo.GetAsync(speciesId, ct);
-                    if (s != null)
-                    {
-                        s.QtyOnHandHub += qty;
-                        s.QtyBookedOutForDelivery = Math.Max(0, s.QtyBookedOutForDelivery - qty);
-                        await _speciesRepo.UpdateAsync(s, ct);
-                    }
+                    await _speciesRepo.AdjustStockAsync(speciesId, +qty, -qty, CancellationToken.None);
                 }
                 catch { /* swallow rollback errors */ }
             }
@@ -191,14 +183,8 @@ public class DeliveryRunService : IDeliveryRunService
             foreach (var line in allocation.Lines)
             {
                 ct.ThrowIfCancellationRequested();
-                var species = await _speciesRepo.GetAsync(line.SpeciesId, ct);
-                if (species != null)
-                {
-                    species.QtyOnHandHub += line.Qty;
-                    species.QtyBookedOutForDelivery = Math.Max(0, species.QtyBookedOutForDelivery - line.Qty);
-                    await _speciesRepo.UpdateAsync(species, ct);
-                    reversed.Add((line.SpeciesId, line.Qty));
-                }
+                await _speciesRepo.AdjustStockAsync(line.SpeciesId, +line.Qty, -line.Qty, ct);
+                reversed.Add((line.SpeciesId, line.Qty));
             }
 
             await _deliveryRepo.DeleteAsync(deliveryOrderId, ct);
@@ -213,13 +199,7 @@ public class DeliveryRunService : IDeliveryRunService
             {
                 try
                 {
-                    var s = await _speciesRepo.GetAsync(speciesId, ct);
-                    if (s != null)
-                    {
-                        s.QtyOnHandHub -= qty;
-                        s.QtyBookedOutForDelivery += qty;
-                        await _speciesRepo.UpdateAsync(s, ct);
-                    }
+                    await _speciesRepo.AdjustStockAsync(speciesId, -qty, +qty, CancellationToken.None);
                 }
                 catch { /* swallow rollback errors */ }
             }

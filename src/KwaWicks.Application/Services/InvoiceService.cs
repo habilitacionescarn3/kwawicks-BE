@@ -78,9 +78,7 @@ public class InvoiceService : IInvoiceService
                     throw new InvalidOperationException(
                         $"Insufficient stock for {species.Name}. On hand: {species.QtyOnHandHub}, requested: {line.Quantity}");
 
-                species.QtyOnHandHub -= line.Quantity;
-                species.QtyBookedOutForDelivery += line.Quantity;
-                await _speciesRepo.UpdateAsync(species, ct);
+                await _speciesRepo.AdjustStockAsync(line.SpeciesId, -line.Quantity, +line.Quantity, ct, minOnHandRequired: line.Quantity);
                 bookedOut.Add((species.SpeciesId, line.Quantity));
 
                 var lineNet = line.Quantity * line.UnitPrice;
@@ -172,13 +170,7 @@ public class InvoiceService : IInvoiceService
             {
                 try
                 {
-                    var s = await _speciesRepo.GetAsync(speciesId, ct);
-                    if (s != null)
-                    {
-                        s.QtyOnHandHub += qty;
-                        s.QtyBookedOutForDelivery = Math.Max(0, s.QtyBookedOutForDelivery - qty);
-                        await _speciesRepo.UpdateAsync(s, ct);
-                    }
+                    await _speciesRepo.AdjustStockAsync(speciesId, +qty, -qty, CancellationToken.None);
                 }
                 catch { /* swallow rollback errors */ }
             }
@@ -258,17 +250,16 @@ public class InvoiceService : IInvoiceService
         invoice.GrandTotal = subTotal + vatTotal;
         await _invoiceRepo.CreateAsync(invoice, ct);
 
-        // Reconcile stock: release booked qty, return not-wanted to on-hand
+        // Atomically reconcile stock: release booked qty, return not-wanted to on-hand
         foreach (var line in request.Lines)
         {
             var doLine = deliveryOrder.Lines.First(l => l.SpeciesId == line.SpeciesId);
-            var species = await _speciesRepo.GetAsync(line.SpeciesId, ct);
-            if (species != null)
-            {
-                species.QtyBookedOutForDelivery = Math.Max(0, species.QtyBookedOutForDelivery - doLine.Quantity);
-                species.QtyOnHandHub += line.ReturnedNotWantedQty; // dead/mutilated are losses
-                await _speciesRepo.UpdateAsync(species, ct);
-            }
+            // Deduct from booked (negative delta) and add returns to on-hand
+            await _speciesRepo.AdjustStockAsync(
+                line.SpeciesId,
+                onHandDelta: +line.ReturnedNotWantedQty,
+                bookedDelta: -doLine.Quantity,
+                ct);
 
             // Record return details on the delivery order line
             doLine.DeliveredQty = line.DeliveredQty;

@@ -43,8 +43,7 @@ public class DriverStockAllocationService : IDriverStockAllocationService
                     throw new InvalidOperationException(
                         $"Insufficient hub stock for {species.Name}. Available: {species.QtyOnHandHub}, requested: {line.Qty}.");
 
-                species.QtyOnHandHub -= line.Qty;
-                await _speciesRepo.UpdateAsync(species, ct);
+                await _speciesRepo.AdjustStockAsync(line.SpeciesId, -line.Qty, 0, ct, minOnHandRequired: line.Qty);
                 decremented.Add((line.SpeciesId, line.Qty));
             }
 
@@ -82,12 +81,7 @@ public class DriverStockAllocationService : IDriverStockAllocationService
             {
                 try
                 {
-                    var s = await _speciesRepo.GetAsync(speciesId, ct);
-                    if (s != null)
-                    {
-                        s.QtyOnHandHub += qty;
-                        await _speciesRepo.UpdateAsync(s, ct);
-                    }
+                    await _speciesRepo.AdjustStockAsync(speciesId, +qty, 0, CancellationToken.None);
                 }
                 catch { /* swallow rollback errors */ }
             }
@@ -200,13 +194,8 @@ public class DriverStockAllocationService : IDriverStockAllocationService
                 if (remainingQty <= 0)
                     continue;
 
-                var species = await _speciesRepo.GetAsync(line.SpeciesId, ct);
-                if (species != null)
-                {
-                    species.QtyOnHandHub += remainingQty;
-                    await _speciesRepo.UpdateAsync(species, ct);
-                    returned.Add((line.SpeciesId, remainingQty));
-                }
+                await _speciesRepo.AdjustStockAsync(line.SpeciesId, +remainingQty, 0, ct);
+                returned.Add((line.SpeciesId, remainingQty));
             }
         }
         catch
@@ -216,12 +205,7 @@ public class DriverStockAllocationService : IDriverStockAllocationService
             {
                 try
                 {
-                    var s = await _speciesRepo.GetAsync(speciesId, ct);
-                    if (s != null)
-                    {
-                        s.QtyOnHandHub = Math.Max(0, s.QtyOnHandHub - qty);
-                        await _speciesRepo.UpdateAsync(s, ct);
-                    }
+                    await _speciesRepo.AdjustStockAsync(speciesId, -qty, 0, CancellationToken.None);
                 }
                 catch { /* swallow rollback errors */ }
             }

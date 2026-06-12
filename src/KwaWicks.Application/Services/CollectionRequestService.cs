@@ -204,13 +204,9 @@ public class CollectionRequestService : ICollectionRequestService
             foreach (var line in cr.Lines.Where(l => l.ReceivedQty > 0))
             {
                 ct.ThrowIfCancellationRequested();
-                var species = await _speciesRepo.GetAsync(line.SpeciesId, ct);
-                if (species != null)
-                {
-                    species.QtyOnHandHub += line.ReceivedQty;
-                    await _speciesRepo.UpdateAsync(species, ct);
-                    bookedIn.Add((line.SpeciesId, line.ReceivedQty));
-                }
+                // Atomic ADD — eliminates stale-write races with concurrent deliveries
+                await _speciesRepo.AdjustStockAsync(line.SpeciesId, +line.ReceivedQty, 0, ct);
+                bookedIn.Add((line.SpeciesId, line.ReceivedQty));
             }
 
             await _repo.UpdateAsync(cr, ct);
@@ -225,17 +221,12 @@ public class CollectionRequestService : ICollectionRequestService
         }
         catch
         {
-            // Compensating rollback
+            // Compensating rollback — atomically reverse each addition
             foreach (var (speciesId, qty) in bookedIn)
             {
                 try
                 {
-                    var s = await _speciesRepo.GetAsync(speciesId, ct);
-                    if (s != null)
-                    {
-                        s.QtyOnHandHub = Math.Max(0, s.QtyOnHandHub - qty);
-                        await _speciesRepo.UpdateAsync(s, ct);
-                    }
+                    await _speciesRepo.AdjustStockAsync(speciesId, -qty, 0, CancellationToken.None);
                 }
                 catch { /* swallow rollback errors */ }
             }
@@ -424,13 +415,9 @@ public class CollectionRequestService : ICollectionRequestService
                 UnitPrice = unitPrice
             });
 
-            // Book out of hub inventory as en-route: only QtyBookedOutForDelivery increases
-            // (stock is on the truck, not physically at hub — QtyOnHandHub is NOT decremented here)
-            if (species != null)
-            {
-                species.QtyBookedOutForDelivery += reqLine.Qty;
-                await _speciesRepo.UpdateAsync(species, ct);
-            }
+            // Atomically mark stock as en-route: BookedOutForDelivery increases only
+            // (on the truck, not physically at hub — QtyOnHandHub is NOT decremented here)
+            await _speciesRepo.AdjustStockAsync(reqLine.SpeciesId, 0, +reqLine.Qty, ct);
         }
 
         // Delivery orders are hidden from drivers until stock is actually collected from the supplier.
@@ -561,13 +548,8 @@ public class CollectionRequestService : ICollectionRequestService
                 int delta = edit.Qty - allocationLine.Qty;
                 if (delta != 0)
                 {
-                    var species = await _speciesRepo.GetAsync(edit.SpeciesId, ct);
-                    if (species != null)
-                    {
-                        species.QtyBookedOutForDelivery = Math.Max(0, species.QtyBookedOutForDelivery + delta);
-                        await _speciesRepo.UpdateAsync(species, ct);
-                        adjustedSpecies.Add((edit.SpeciesId, delta));
-                    }
+                    await _speciesRepo.AdjustStockAsync(edit.SpeciesId, 0, +delta, ct);
+                    adjustedSpecies.Add((edit.SpeciesId, delta));
                 }
 
                 // Update the delivery order line
@@ -596,12 +578,7 @@ public class CollectionRequestService : ICollectionRequestService
             {
                 try
                 {
-                    var s = await _speciesRepo.GetAsync(speciesId, ct);
-                    if (s != null)
-                    {
-                        s.QtyBookedOutForDelivery = Math.Max(0, s.QtyBookedOutForDelivery - delta);
-                        await _speciesRepo.UpdateAsync(s, ct);
-                    }
+                    await _speciesRepo.AdjustStockAsync(speciesId, 0, -delta, CancellationToken.None);
                 }
                 catch { /* swallow rollback errors */ }
             }
@@ -791,13 +768,8 @@ public class CollectionRequestService : ICollectionRequestService
             foreach (var reqLine in request.Lines.Where(l => l.AcceptedQty > 0))
             {
                 ct.ThrowIfCancellationRequested();
-                var species = await _speciesRepo.GetAsync(reqLine.SpeciesId, ct);
-                if (species != null)
-                {
-                    species.QtyOnHandHub += reqLine.AcceptedQty;
-                    await _speciesRepo.UpdateAsync(species, ct);
-                    bookedIn.Add((reqLine.SpeciesId, reqLine.AcceptedQty));
-                }
+                await _speciesRepo.AdjustStockAsync(reqLine.SpeciesId, +reqLine.AcceptedQty, 0, ct);
+                bookedIn.Add((reqLine.SpeciesId, reqLine.AcceptedQty));
 
                 var allocLine = hubAlloc.Lines.First(l => l.SpeciesId == reqLine.SpeciesId);
                 allocLine.AcceptedQty = reqLine.AcceptedQty;
@@ -815,12 +787,7 @@ public class CollectionRequestService : ICollectionRequestService
             {
                 try
                 {
-                    var s = await _speciesRepo.GetAsync(speciesId, ct);
-                    if (s != null)
-                    {
-                        s.QtyOnHandHub = Math.Max(0, s.QtyOnHandHub - qty);
-                        await _speciesRepo.UpdateAsync(s, ct);
-                    }
+                    await _speciesRepo.AdjustStockAsync(speciesId, -qty, 0, CancellationToken.None);
                 }
                 catch { /* swallow rollback errors */ }
             }
@@ -865,20 +832,15 @@ public class CollectionRequestService : ICollectionRequestService
             throw new InvalidOperationException(
                 $"Cannot remove this allocation — the delivery order has status '{deliveryOrder.Status}'.");
 
-        // Reverse QtyBookedOutForDelivery for each species in the allocation
+        // Atomically reverse QtyBookedOutForDelivery for each species in the allocation
         var reversed = new List<(string speciesId, int qty)>();
         try
         {
             foreach (var line in allocation.Lines)
             {
                 ct.ThrowIfCancellationRequested();
-                var species = await _speciesRepo.GetAsync(line.SpeciesId, ct);
-                if (species != null)
-                {
-                    species.QtyBookedOutForDelivery = Math.Max(0, species.QtyBookedOutForDelivery - line.Qty);
-                    await _speciesRepo.UpdateAsync(species, ct);
-                    reversed.Add((line.SpeciesId, line.Qty));
-                }
+                await _speciesRepo.AdjustStockAsync(line.SpeciesId, 0, -line.Qty, ct);
+                reversed.Add((line.SpeciesId, line.Qty));
             }
 
             // Delete the delivery order — it was created solely for this allocation
@@ -896,12 +858,7 @@ public class CollectionRequestService : ICollectionRequestService
             {
                 try
                 {
-                    var s = await _speciesRepo.GetAsync(speciesId, ct);
-                    if (s != null)
-                    {
-                        s.QtyBookedOutForDelivery += qty;
-                        await _speciesRepo.UpdateAsync(s, ct);
-                    }
+                    await _speciesRepo.AdjustStockAsync(speciesId, 0, +qty, CancellationToken.None);
                 }
                 catch { /* swallow rollback errors */ }
             }

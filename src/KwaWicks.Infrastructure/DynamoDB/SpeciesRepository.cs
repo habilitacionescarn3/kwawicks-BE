@@ -101,6 +101,53 @@ public class SpeciesRepository : ISpeciesRepository
         return species;
     }
 
+    public async Task AdjustStockAsync(string speciesId, int onHandDelta, int bookedDelta, CancellationToken ct, int minOnHandRequired = 0)
+    {
+        var expressionNames = new Dictionary<string, string>
+        {
+            ["#oh"] = "QtyOnHandHub",
+            ["#bo"] = "QtyBookedOutForDelivery"
+        };
+        var expressionValues = new Dictionary<string, AttributeValue>
+        {
+            [":onHand"] = new AttributeValue { N = onHandDelta.ToString(CultureInfo.InvariantCulture) },
+            [":booked"] = new AttributeValue { N = bookedDelta.ToString(CultureInfo.InvariantCulture) }
+        };
+
+        string condition = "attribute_exists(PK)";
+        if (minOnHandRequired > 0)
+        {
+            // Prevent hub stock from dropping below the required minimum
+            expressionValues[":minQty"] = new AttributeValue { N = minOnHandRequired.ToString(CultureInfo.InvariantCulture) };
+            condition += " AND #oh >= :minQty";
+        }
+
+        var req = new UpdateItemRequest
+        {
+            TableName = _tableName,
+            Key = new Dictionary<string, AttributeValue>
+            {
+                ["PK"] = new AttributeValue { S = Pk(speciesId) },
+                ["SK"] = new AttributeValue { S = SkMeta }
+            },
+            UpdateExpression = "ADD #oh :onHand, #bo :booked",
+            ConditionExpression = condition,
+            ExpressionAttributeNames = expressionNames,
+            ExpressionAttributeValues = expressionValues
+        };
+
+        try
+        {
+            await _ddb.UpdateItemAsync(req, ct);
+        }
+        catch (ConditionalCheckFailedException)
+        {
+            throw new InvalidOperationException(
+                $"Insufficient stock for species '{speciesId}'. " +
+                $"Required at least {minOnHandRequired} on hand.");
+        }
+    }
+
     // ✅ Single source of truth for mapping -> DynamoDB item
     private static Dictionary<string, AttributeValue> ToItem(Species s)
     {

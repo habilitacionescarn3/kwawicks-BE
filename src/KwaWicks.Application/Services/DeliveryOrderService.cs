@@ -56,18 +56,14 @@ public class DeliveryOrderService : IDeliveryOrderService
             {
                 ct.ThrowIfCancellationRequested();
 
+                // Fetch only to get the species name for error messages and the unit price
                 var species = await _speciesRepo.GetAsync(line.SpeciesId, ct);
                 if (species == null)
                     throw new InvalidOperationException($"Species not found: {line.SpeciesId}");
 
-                if (species.QtyOnHandHub < line.Quantity)
-                    throw new InvalidOperationException(
-                        $"Insufficient stock for {species.Name}. On hand: {species.QtyOnHandHub}, requested: {line.Quantity}");
-
-                species.QtyOnHandHub -= line.Quantity;
-                species.QtyBookedOutForDelivery += line.Quantity;
-                await _speciesRepo.UpdateAsync(species, ct);
-                bookedOut.Add((species.SpeciesId, line.Quantity));
+                // Atomic ADD: deduct on-hand, add to booked. Condition ensures stock is sufficient.
+                await _speciesRepo.AdjustStockAsync(line.SpeciesId, -line.Quantity, +line.Quantity, ct, minOnHandRequired: line.Quantity);
+                bookedOut.Add((line.SpeciesId, line.Quantity));
 
                 deliveryOrder.Lines.Add(new DeliveryOrderLine
                 {
@@ -97,13 +93,8 @@ public class DeliveryOrderService : IDeliveryOrderService
             {
                 try
                 {
-                    var s = await _speciesRepo.GetAsync(speciesId, ct);
-                    if (s != null)
-                    {
-                        s.QtyOnHandHub += qty;
-                        s.QtyBookedOutForDelivery = Math.Max(0, s.QtyBookedOutForDelivery - qty);
-                        await _speciesRepo.UpdateAsync(s, ct);
-                    }
+                    // Atomic rollback: reverse the deduction
+                    await _speciesRepo.AdjustStockAsync(speciesId, +qty, -qty, CancellationToken.None);
                 }
                 catch { /* swallow rollback errors */ }
             }
@@ -261,16 +252,9 @@ public class DeliveryOrderService : IDeliveryOrderService
 
                 if (delta != 0)
                 {
-                    var species = await _speciesRepo.GetAsync(edit.SpeciesId, ct)
-                        ?? throw new InvalidOperationException($"Species not found: {edit.SpeciesId}");
-
-                    if (delta > 0 && species.QtyOnHandHub < delta)
-                        throw new InvalidOperationException(
-                            $"Insufficient stock for {species.Name}. On hand: {species.QtyOnHandHub}, additional needed: {delta}");
-
-                    species.QtyOnHandHub -= delta;
-                    species.QtyBookedOutForDelivery += delta;
-                    await _speciesRepo.UpdateAsync(species, ct);
+                    // Atomic adjustment; condition enforces sufficient on-hand for increases
+                    int minRequired = delta > 0 ? delta : 0;
+                    await _speciesRepo.AdjustStockAsync(edit.SpeciesId, -delta, +delta, ct, minOnHandRequired: minRequired);
                     adjustedSpecies.Add((edit.SpeciesId, delta));
                 }
 
@@ -288,13 +272,7 @@ public class DeliveryOrderService : IDeliveryOrderService
             {
                 try
                 {
-                    var s = await _speciesRepo.GetAsync(speciesId, ct);
-                    if (s != null)
-                    {
-                        s.QtyOnHandHub += delta;
-                        s.QtyBookedOutForDelivery = Math.Max(0, s.QtyBookedOutForDelivery - delta);
-                        await _speciesRepo.UpdateAsync(s, ct);
-                    }
+                    await _speciesRepo.AdjustStockAsync(speciesId, +delta, -delta, CancellationToken.None);
                 }
                 catch { /* swallow rollback errors */ }
             }
@@ -311,15 +289,10 @@ public class DeliveryOrderService : IDeliveryOrderService
             throw new InvalidOperationException(
                 $"Only Open orders can be deleted. This order is '{order.Status}'.");
 
-        // Restore stock for every line before deleting
+        // Atomically restore stock for every line before deleting
         foreach (var line in order.Lines)
         {
-            var species = await _speciesRepo.GetAsync(line.SpeciesId, ct);
-            if (species is null) continue;
-
-            species.QtyOnHandHub += line.Quantity;
-            species.QtyBookedOutForDelivery = Math.Max(0, species.QtyBookedOutForDelivery - line.Quantity);
-            await _speciesRepo.UpdateAsync(species, ct);
+            await _speciesRepo.AdjustStockAsync(line.SpeciesId, +line.Quantity, -line.Quantity, ct);
         }
 
         await _deliveryRepo.DeleteAsync(deliveryOrderId, ct);
