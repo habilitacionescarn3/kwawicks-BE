@@ -148,6 +148,15 @@ builder.Services.AddScoped<IVehicleTrackingRepository>(sp =>
 builder.Services.AddScoped<IVehicleRepository>(sp =>
     new VehicleRepository(sp.GetRequiredService<IAmazonDynamoDB>(), tableName));
 
+builder.Services.AddScoped<ISiteRepository>(sp =>
+    new SiteRepository(sp.GetRequiredService<IAmazonDynamoDB>(), tableName));
+
+builder.Services.AddScoped<IDipTankRepository>(sp =>
+    new DipTankRepository(sp.GetRequiredService<IAmazonDynamoDB>(), tableName));
+
+builder.Services.AddScoped<IFuelRepository>(sp =>
+    new FuelRepository(sp.GetRequiredService<IAmazonDynamoDB>(), tableName));
+
 // Services
 builder.Services.AddScoped<SpeciesService>();
 builder.Services.AddScoped<IClientService, ClientService>();
@@ -165,6 +174,9 @@ builder.Services.AddScoped<ICollectionRequestService, CollectionRequestService>(
 builder.Services.AddScoped<IDeliveryRunService, DeliveryRunService>();
 builder.Services.AddScoped<IStaffMemberService, StaffMemberService>();
 builder.Services.AddScoped<VehicleService>();
+builder.Services.AddScoped<SiteService>();
+builder.Services.AddScoped<DipTankService>();
+builder.Services.AddScoped<FuelService>();
 builder.Services.AddScoped<IClientCreditService>(sp =>
     new ClientCreditService(
         sp.GetRequiredService<IClientCreditRepository>(),
