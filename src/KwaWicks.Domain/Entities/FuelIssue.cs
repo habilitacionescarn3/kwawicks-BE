@@ -4,7 +4,10 @@ public class FuelIssue
 {
     public string IssueId { get; set; } = Guid.NewGuid().ToString("N");
     public string VehicleId { get; set; } = "";
+    public string FuelSource { get; set; } = "tank";   // "tank" | "offsite"
     public string TankId { get; set; } = "";
+    public string TankIssuedBy { get; set; } = "";     // staff member who dispensed from tank
+    public string SupplierStation { get; set; } = "";  // off-site station/supplier name
     public string SiteId { get; set; } = "";
     public decimal Litres { get; set; }
     public decimal? OdometerKm { get; set; }

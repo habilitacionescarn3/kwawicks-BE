@@ -84,7 +84,10 @@ public class FuelRepository : IFuelRepository
             ["EntityType"] = new AttributeValue { S = "FuelIssue" },
             ["IssueId"] = new AttributeValue { S = f.IssueId },
             ["VehicleId"] = new AttributeValue { S = f.VehicleId },
+            ["FuelSource"] = new AttributeValue { S = f.FuelSource },
             ["TankId"] = new AttributeValue { S = f.TankId },
+            ["TankIssuedBy"] = new AttributeValue { S = f.TankIssuedBy },
+            ["SupplierStation"] = new AttributeValue { S = f.SupplierStation },
             ["SiteId"] = new AttributeValue { S = f.SiteId },
             ["Litres"] = new AttributeValue { N = f.Litres.ToString(CultureInfo.InvariantCulture) },
             ["Reference"] = new AttributeValue { S = f.Reference },
@@ -100,10 +103,13 @@ public class FuelRepository : IFuelRepository
 
     private static FuelIssue FromItem(Dictionary<string, AttributeValue> item) => new()
     {
-        IssueId      = item.TryGetValue("IssueId", out var iid) ? iid.S ?? "" : "",
-        VehicleId    = item.TryGetValue("VehicleId", out var vid) ? vid.S ?? "" : "",
-        TankId       = item.TryGetValue("TankId", out var tid) ? tid.S ?? "" : "",
-        SiteId       = item.TryGetValue("SiteId", out var sid) ? sid.S ?? "" : "",
+        IssueId         = item.TryGetValue("IssueId", out var iid) ? iid.S ?? "" : "",
+        VehicleId       = item.TryGetValue("VehicleId", out var vid) ? vid.S ?? "" : "",
+        FuelSource      = item.TryGetValue("FuelSource", out var fs) ? fs.S ?? "tank" : "tank",
+        TankId          = item.TryGetValue("TankId", out var tid) ? tid.S ?? "" : "",
+        TankIssuedBy    = item.TryGetValue("TankIssuedBy", out var tib) ? tib.S ?? "" : "",
+        SupplierStation = item.TryGetValue("SupplierStation", out var ss) ? ss.S ?? "" : "",
+        SiteId          = item.TryGetValue("SiteId", out var sid) ? sid.S ?? "" : "",
         Litres       = item.TryGetValue("Litres", out var li) && decimal.TryParse(li.N, NumberStyles.Number, CultureInfo.InvariantCulture, out var liv) ? liv : 0,
         OdometerKm   = item.TryGetValue("OdometerKm", out var od) && decimal.TryParse(od.N, NumberStyles.Number, CultureInfo.InvariantCulture, out var odv) ? odv : null,
         CostPerLitre = item.TryGetValue("CostPerLitre", out var cp) && decimal.TryParse(cp.N, NumberStyles.Number, CultureInfo.InvariantCulture, out var cpv) ? cpv : null,

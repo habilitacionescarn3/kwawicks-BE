@@ -55,10 +55,13 @@ public class FuelIssuesController : ControllerBase
         return Ok(dto);
     }
 
-    // GET /api/fuel/report?from=2025-01-01&to=2025-12-31
+    // GET /api/fuel/report?vehicleId=&from=2025-01-01&to=2025-12-31
     [HttpGet("report")]
     [ProducesResponseType(typeof(List<VehicleFuelReportDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Report(
-        [FromQuery] string? from, [FromQuery] string? to, CancellationToken ct) =>
-        Ok(await _service.GetReportAsync(from, to, ct));
+        [FromQuery] string? vehicleId,
+        [FromQuery] string? from,
+        [FromQuery] string? to,
+        CancellationToken ct) =>
+        Ok(await _service.GetReportAsync(vehicleId, from, to, ct));
 }

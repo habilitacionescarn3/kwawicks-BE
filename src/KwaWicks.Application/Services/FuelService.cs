@@ -36,9 +36,12 @@ public class FuelService
 
         var issue = new FuelIssue
         {
-            VehicleId    = req.VehicleId,
-            TankId       = req.TankId ?? "",
-            SiteId       = req.SiteId ?? tank?.SiteId ?? "",
+            VehicleId       = req.VehicleId,
+            FuelSource      = req.FuelSource == "offsite" ? "offsite" : "tank",
+            TankId          = req.TankId ?? "",
+            TankIssuedBy    = req.TankIssuedBy?.Trim() ?? "",
+            SupplierStation = req.SupplierStation?.Trim() ?? "",
+            SiteId          = req.SiteId ?? tank?.SiteId ?? "",
             Litres       = req.Litres,
             OdometerKm   = req.OdometerKm,
             CostPerLitre = req.CostPerLitre,
@@ -109,10 +112,14 @@ public class FuelService
     // ── Report ────────────────────────────────────────────────────────────────
 
     public async Task<List<VehicleFuelReportDto>> GetReportAsync(
-        string? fromDate, string? toDate, CancellationToken ct)
+        string? vehicleId, string? fromDate, string? toDate, CancellationToken ct)
     {
         var allIssues = await _repo.ListAsync(ct);
         var vehicles  = (await _vehicleRepo.ListAsync(ct)).ToDictionary(v => v.VehicleId);
+
+        // Apply vehicle filter
+        if (!string.IsNullOrWhiteSpace(vehicleId))
+            allIssues = allIssues.Where(i => i.VehicleId == vehicleId).ToList();
 
         // Apply date filter
         if (DateTime.TryParse(fromDate, out var from))
@@ -191,13 +198,16 @@ public class FuelService
 
     private static FuelIssueDto ToDto(FuelIssue i, string fleetNumber, string tankName, string siteName) => new()
     {
-        IssueId      = i.IssueId,
-        VehicleId    = i.VehicleId,
-        FleetNumber  = fleetNumber,
-        TankId       = i.TankId,
-        TankName     = tankName,
-        SiteId       = i.SiteId,
-        SiteName     = siteName,
+        IssueId         = i.IssueId,
+        VehicleId       = i.VehicleId,
+        FleetNumber     = fleetNumber,
+        FuelSource      = i.FuelSource,
+        TankId          = i.TankId,
+        TankName        = tankName,
+        TankIssuedBy    = i.TankIssuedBy,
+        SupplierStation = i.SupplierStation,
+        SiteId          = i.SiteId,
+        SiteName        = siteName,
         Litres       = i.Litres,
         OdometerKm   = i.OdometerKm,
         CostPerLitre = i.CostPerLitre,
